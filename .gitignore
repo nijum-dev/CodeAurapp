@@ -1,3 +1,24 @@
 
 # Java compiled files
 *.class
+
+# Maven generated files
+**/target/
+
+# Node dependencies
+**/node_modules/
+
+# Build outputs
+**/dist/
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+
+# Operating system files
+.DS_Store
+Thumbs.db

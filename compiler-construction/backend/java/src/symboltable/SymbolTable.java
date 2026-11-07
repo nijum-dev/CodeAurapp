@@ -7,6 +7,9 @@ public class SymbolTable {
 
     private final Deque<Map<String, Symbol>> scopes = new ArrayDeque<>();
 
+    // Keeps a record of every declared symbol for compiler output.
+    private final List<Symbol> allSymbols = new ArrayList<>();
+
     public SymbolTable() {
         enterScope();
     }
@@ -29,6 +32,8 @@ public class SymbolTable {
         }
 
         currentScope.put(symbol.getName(), symbol);
+        allSymbols.add(symbol);
+
         return true;
     }
 
@@ -47,12 +52,6 @@ public class SymbolTable {
     }
 
     public List<Symbol> getAllSymbols() {
-        List<Symbol> symbols = new ArrayList<>();
-
-        for (Map<String, Symbol> scope : scopes) {
-            symbols.addAll(scope.values());
-        }
-
-        return symbols;
+        return new ArrayList<>(allSymbols);
     }
 }

@@ -1,0 +1,465 @@
+
+package parser;
+
+import java_cup.runtime.*;
+import ast.ASTNode;
+
+parser code {:
+    private ASTNode node(String type, String value) {
+        return new ASTNode(type, value, 1);
+    }
+
+    private String javaType(String type) {
+        if (type.equals("boolean")) return "bool";
+        if (type.equals("double")) return "float";
+        return type;
+    }
+
+    @Override
+    public void syntax_error(Symbol token) {
+        System.err.println(
+            "Java syntax error at line " + token.left +
+            ": unexpected token " + token.value
+        );
+    }
+:};
+
+terminal IFX, UMINUS;
+
+terminal CLASS, PUBLIC, PRIVATE, PROTECTED, STATIC, VOID, MAIN;
+terminal INT, FLOAT, DOUBLE, BOOLEAN, STRING;
+terminal IF, ELSE, WHILE, FOR;
+terminal SYSTEM, OUT, PRINTLN, PRINT;
+
+terminal AND, OR, EQUAL, NOT_EQUAL;
+terminal LESS_EQUAL, GREATER_EQUAL, INCREMENT, DECREMENT;
+terminal PLUS, MINUS, MULTIPLY, DIVIDE, MODULO;
+terminal ASSIGN, LESS, GREATER, NOT;
+
+terminal LBRACE, RBRACE, LPAREN, RPAREN;
+terminal LBRACKET, RBRACKET, SEMICOLON, COMMA, DOT;
+
+terminal String IDENTIFIER;
+terminal String INTEGER_LITERAL, FLOAT_LITERAL;
+terminal String STRING_LITERAL, BOOLEAN_LITERAL;
+
+non terminal ASTNode program, class_decl, main_method;
+non terminal ASTNode block, statement_list, statement;
+non terminal ASTNode declaration, declaration_no_semi;
+non terminal ASTNode assignment, assignment_no_semi;
+non terminal ASTNode print_statement;
+non terminal ASTNode if_statement, while_statement, for_statement;
+non terminal ASTNode for_init, for_update;
+non terminal ASTNode expression, logical_or, logical_and;
+non terminal ASTNode equality, comparison, term, factor, unary, primary;
+non terminal ASTNode increment_statement;
+
+non terminal String type_name;
+
+precedence nonassoc IFX;
+precedence right ELSE;
+precedence left OR;
+precedence left AND;
+precedence left EQUAL, NOT_EQUAL;
+precedence left LESS, GREATER, LESS_EQUAL, GREATER_EQUAL;
+precedence left PLUS, MINUS;
+precedence left MULTIPLY, DIVIDE, MODULO;
+precedence right NOT, UMINUS;
+
+start with program;
+
+/* Program and class */
+
+program ::=
+    class_decl:c
+    {:
+        ASTNode root = new ASTNode("PROGRAM", null, 1);
+        root.addChild(c);
+        RESULT = root;
+    :}
+    ;
+
+class_decl ::=
+    PUBLIC CLASS IDENTIFIER:name LBRACE main_method:m RBRACE
+    {: RESULT = m; :}
+    |
+    CLASS IDENTIFIER:name LBRACE main_method:m RBRACE
+    {: RESULT = m; :}
+    ;
+
+main_method ::=
+    PUBLIC STATIC VOID MAIN
+    LPAREN STRING LBRACKET RBRACKET IDENTIFIER RPAREN
+    block:b
+    {: RESULT = b; :}
+    ;
+
+/* Blocks and statements */
+
+block ::=
+    LBRACE statement_list:s RBRACE
+    {: RESULT = s; :}
+    ;
+
+statement_list ::=
+    statement_list:l statement:s
+    {:
+        l.addChild(s);
+        RESULT = l;
+    :}
+    |
+    {:
+        RESULT = new ASTNode("BLOCK", null, 1);
+    :}
+    ;
+
+statement ::=
+    declaration:d {: RESULT = d; :}
+    |
+    assignment:a {: RESULT = a; :}
+    |
+    print_statement:p {: RESULT = p; :}
+    |
+    if_statement:i {: RESULT = i; :}
+    |
+    while_statement:w {: RESULT = w; :}
+    |
+    for_statement:f {: RESULT = f; :}
+    |
+    block:b {: RESULT = b; :}
+    ;
+
+/* Data types */
+
+type_name ::=
+    INT     {: RESULT = "int"; :}
+    |
+    FLOAT   {: RESULT = "float"; :}
+    |
+    DOUBLE  {: RESULT = "double"; :}
+    |
+    BOOLEAN {: RESULT = "boolean"; :}
+    ;
+
+/* Declarations */
+
+declaration ::=
+    type_name:t IDENTIFIER:name SEMICOLON
+    {:
+        RESULT = new ASTNode("DECLARATION", javaType(t), 1);
+        RESULT.addChild(node("IDENTIFIER", name));
+    :}
+    |
+    type_name:t IDENTIFIER:name ASSIGN expression:e SEMICOLON
+    {:
+        RESULT = new ASTNode("DECLARATION", javaType(t), 1);
+        RESULT.addChild(node("IDENTIFIER", name));
+        RESULT.addChild(e);
+    :}
+    ;
+
+declaration_no_semi ::=
+    type_name:t IDENTIFIER:name
+    {:
+        RESULT = new ASTNode("DECLARATION", javaType(t), 1);
+        RESULT.addChild(node("IDENTIFIER", name));
+    :}
+    |
+    type_name:t IDENTIFIER:name ASSIGN expression:e
+    {:
+        RESULT = new ASTNode("DECLARATION", javaType(t), 1);
+        RESULT.addChild(node("IDENTIFIER", name));
+        RESULT.addChild(e);
+    :}
+    ;
+
+/* Assignments */
+
+assignment ::=
+    IDENTIFIER:name ASSIGN expression:e SEMICOLON
+    {:
+        RESULT = new ASTNode("ASSIGNMENT", name, 1);
+        RESULT.addChild(e);
+    :}
+    ;
+
+assignment_no_semi ::=
+    IDENTIFIER:name ASSIGN expression:e
+    {:
+        RESULT = new ASTNode("ASSIGNMENT", name, 1);
+        RESULT.addChild(e);
+    :}
+    ;
+
+/* Increment and decrement */
+
+increment_statement ::=
+    IDENTIFIER:name INCREMENT
+    {:
+        RESULT = new ASTNode("ASSIGNMENT", name, 1);
+        ASTNode binary = new ASTNode("BINARY", "+", 1);
+        binary.addChild(node("IDENTIFIER", name));
+        binary.addChild(node("LITERAL", "1"));
+        RESULT.addChild(binary);
+    :}
+    |
+    IDENTIFIER:name DECREMENT
+    {:
+        RESULT = new ASTNode("ASSIGNMENT", name, 1);
+        ASTNode binary = new ASTNode("BINARY", "-", 1);
+        binary.addChild(node("IDENTIFIER", name));
+        binary.addChild(node("LITERAL", "1"));
+        RESULT.addChild(binary);
+    :}
+    ;
+
+/* Print */
+
+print_statement ::=
+    SYSTEM DOT OUT DOT PRINTLN LPAREN expression:e RPAREN SEMICOLON
+    {:
+        RESULT = new ASTNode("PRINT", null, 1);
+        RESULT.addChild(e);
+    :}
+    |
+    PRINT LPAREN expression:e RPAREN SEMICOLON
+    {:
+        RESULT = new ASTNode("PRINT", null, 1);
+        RESULT.addChild(e);
+    :}
+    ;
+
+/* If and else */
+
+if_statement ::=
+    IF LPAREN expression:e RPAREN statement:s
+    {:
+        RESULT = new ASTNode("IF", null, 1);
+        RESULT.addChild(e);
+        RESULT.addChild(s);
+    :}
+    %prec IFX
+    |
+    IF LPAREN expression:e RPAREN statement:s ELSE statement:other
+    {:
+        RESULT = new ASTNode("IF", null, 1);
+        RESULT.addChild(e);
+        RESULT.addChild(s);
+        RESULT.addChild(other);
+    :}
+    ;
+
+/* While */
+
+while_statement ::=
+    WHILE LPAREN expression:e RPAREN statement:s
+    {:
+        RESULT = new ASTNode("WHILE", null, 1);
+        RESULT.addChild(e);
+        RESULT.addChild(s);
+    :}
+    ;
+
+/* For */
+
+for_statement ::=
+    FOR LPAREN for_init:i SEMICOLON
+    expression:e SEMICOLON for_update:u RPAREN statement:s
+    {:
+        RESULT = new ASTNode("FOR", null, 1);
+        RESULT.addChild(i);
+        RESULT.addChild(e);
+        RESULT.addChild(u);
+        RESULT.addChild(s);
+    :}
+    |
+    FOR LPAREN for_init:i SEMICOLON
+    SEMICOLON for_update:u RPAREN statement:s
+    {:
+        ASTNode result = new ASTNode("FOR", null, 1);
+        result.addChild(i);
+        result.addChild(node("EMPTY", null));
+        result.addChild(u);
+        result.addChild(s);
+        RESULT = result;
+    :}
+    ;
+
+for_init ::=
+    declaration_no_semi:d {: RESULT = d; :}
+    |
+    assignment_no_semi:a {: RESULT = a; :}
+    |
+    {: RESULT = node("EMPTY", null); :}
+    ;
+
+for_update ::=
+    assignment_no_semi:a {: RESULT = a; :}
+    |
+    increment_statement:i {: RESULT = i; :}
+    |
+    {: RESULT = node("EMPTY", null); :}
+    ;
+
+/* Expressions */
+
+expression ::=
+    logical_or:e {: RESULT = e; :}
+    ;
+
+logical_or ::=
+    logical_or:l OR logical_and:r
+    {:
+        RESULT = new ASTNode("BINARY", "||", 1);
+        RESULT.addChild(l);
+        RESULT.addChild(r);
+    :}
+    |
+    logical_and:e {: RESULT = e; :}
+    ;
+
+logical_and ::=
+    logical_and:l AND equality:r
+    {:
+        RESULT = new ASTNode("BINARY", "&&", 1);
+        RESULT.addChild(l);
+        RESULT.addChild(r);
+    :}
+    |
+    equality:e {: RESULT = e; :}
+    ;
+
+equality ::=
+    equality:l EQUAL comparison:r
+    {:
+        RESULT = new ASTNode("BINARY", "==", 1);
+        RESULT.addChild(l);
+        RESULT.addChild(r);
+    :}
+    |
+    equality:l NOT_EQUAL comparison:r
+    {:
+        RESULT = new ASTNode("BINARY", "!=", 1);
+        RESULT.addChild(l);
+        RESULT.addChild(r);
+    :}
+    |
+    comparison:e {: RESULT = e; :}
+    ;
+
+comparison ::=
+    comparison:l LESS term:r
+    {:
+        RESULT = new ASTNode("BINARY", "<", 1);
+        RESULT.addChild(l);
+        RESULT.addChild(r);
+    :}
+    |
+    comparison:l GREATER term:r
+    {:
+        RESULT = new ASTNode("BINARY", ">", 1);
+        RESULT.addChild(l);
+        RESULT.addChild(r);
+    :}
+    |
+    comparison:l LESS_EQUAL term:r
+    {:
+        RESULT = new ASTNode("BINARY", "<=", 1);
+        RESULT.addChild(l);
+        RESULT.addChild(r);
+    :}
+    |
+    comparison:l GREATER_EQUAL term:r
+    {:
+        RESULT = new ASTNode("BINARY", ">=", 1);
+        RESULT.addChild(l);
+        RESULT.addChild(r);
+    :}
+    |
+    term:e {: RESULT = e; :}
+    ;
+
+term ::=
+    term:l PLUS factor:r
+    {:
+        RESULT = new ASTNode("BINARY", "+", 1);
+        RESULT.addChild(l);
+        RESULT.addChild(r);
+    :}
+    |
+    term:l MINUS factor:r
+    {:
+        RESULT = new ASTNode("BINARY", "-", 1);
+        RESULT.addChild(l);
+        RESULT.addChild(r);
+    :}
+    |
+    factor:e {: RESULT = e; :}
+    ;
+
+factor ::=
+    factor:l MULTIPLY unary:r
+    {:
+        RESULT = new ASTNode("BINARY", "*", 1);
+        RESULT.addChild(l);
+        RESULT.addChild(r);
+    :}
+    |
+    factor:l DIVIDE unary:r
+    {:
+        RESULT = new ASTNode("BINARY", "/", 1);
+        RESULT.addChild(l);
+        RESULT.addChild(r);
+    :}
+    |
+    factor:l MODULO unary:r
+    {:
+        RESULT = new ASTNode("BINARY", "%", 1);
+        RESULT.addChild(l);
+        RESULT.addChild(r);
+    :}
+    |
+    unary:e {: RESULT = e; :}
+    ;
+
+/* Unary expressions */
+
+unary ::=
+    NOT unary:e
+    {:
+        RESULT = new ASTNode("UNARY", "!", 1);
+        RESULT.addChild(e);
+    :}
+    %prec NOT
+    |
+    MINUS unary:e
+    {:
+        RESULT = new ASTNode("UNARY", "-", 1);
+        RESULT.addChild(e);
+    :}
+    %prec UMINUS
+    |
+    primary:e {: RESULT = e; :}
+    ;
+
+/* Primary expressions */
+
+primary ::=
+    IDENTIFIER:name
+    {: RESULT = node("IDENTIFIER", name); :}
+    |
+    INTEGER_LITERAL:value
+    {: RESULT = node("LITERAL", value); :}
+    |
+    FLOAT_LITERAL:value
+    {: RESULT = node("LITERAL", value); :}
+    |
+    BOOLEAN_LITERAL:value
+    {: RESULT = node("LITERAL", value); :}
+    |
+    STRING_LITERAL:value
+    {: RESULT = node("LITERAL", value); :}
+    |
+    LPAREN expression:e RPAREN
+    {: RESULT = e; :}
+    ;
