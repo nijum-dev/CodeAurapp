@@ -11,6 +11,9 @@
 # Build outputs
 **/dist/
 
+# Native C compiler build output
+backend/c/c-compiler
+
 # Environment variables
 .env
 .env.*
